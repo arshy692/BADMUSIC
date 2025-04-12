@@ -3,43 +3,26 @@ import os
 from datetime import datetime, timedelta
 from typing import Union
 
+from ntgcalls import TelegramServerError
 from pyrogram import Client
 from pyrogram.types import InlineKeyboardMarkup
 from pytgcalls import PyTgCalls, filters
 from pytgcalls.exceptions import (
     AlreadyJoinedError,
+    InvalidMTProtoClient,
     NoActiveGroupCall,
 )
-from ntgcalls import TelegramServerError
-from pytgcalls.types import (
-    GroupCallParticipant,
-    MediaStream,
-    ChatUpdate, 
-    Update,
-)
-from pytgcalls.types import (
-    AudioQuality, 
-    VideoQuality,
-)
-
-from pyrogram import Client
-from pytgcalls import PyTgCalls
-from pytgcalls.types import Update
-from pytgcalls.exceptions import InvalidMTProtoClient
+from pytgcalls.types import AudioQuality, ChatUpdate, MediaStream, Update, VideoQuality
 from pytgcalls.types.stream import StreamAudioEnded
 
 import config
-from strings import get_string
-from BADMUSIC import LOGGER, Platform, app
+from BADMUSIC import LOGGER, app
 from BADMUSIC.misc import db
 from BADMUSIC.utils.database import (
     add_active_chat,
     add_active_video_chat,
-    get_assistant,
-    get_audio_bitrate,
     get_lang,
     get_loop,
-    get_video_bitrate,
     group_assistant,
     is_autoend,
     music_on,
@@ -49,10 +32,10 @@ from BADMUSIC.utils.database import (
 )
 from BADMUSIC.utils.exceptions import AssistantErr
 from BADMUSIC.utils.formatters import check_duration, seconds_to_min, speed_converter
-from BADMUSIC.utils.inline.play import stream_markup, telegram_markup
+from BADMUSIC.utils.inline.play import stream_markup
 from BADMUSIC.utils.stream.autoclear import auto_clean
 from BADMUSIC.utils.thumbnails import gen_thumb
-
+from strings import get_string
 
 autoend = {}
 counter = {}
@@ -62,7 +45,6 @@ async def _clear_(chat_id):
     db[chat_id] = []
     await remove_active_video_chat(chat_id)
     await remove_active_chat(chat_id)
-
 
 
 class Call(PyTgCalls):
@@ -81,7 +63,9 @@ class Call(PyTgCalls):
         try:
             self.vc = PyTgCalls(self.userbot1)
         except InvalidMTProtoClient:
-            print("Invalid MTProto Client. Please check the configuration of your userbot instance.")
+            print(
+                "Invalid MTProto Client. Please check the configuration of your userbot instance."
+            )
             raise
         self.vc_users = {}
 
@@ -125,7 +109,6 @@ class Call(PyTgCalls):
             self.userbot5,
             cache_duration=100,
         )
-      
 
     # Add the track_vc method within the Call class
     async def track_vc(self, client: PyTgCalls, update: Update):
@@ -133,7 +116,7 @@ class Call(PyTgCalls):
         chat_id = update.chat_id
 
         # Ensure the PyTgCalls client is started
-        if not hasattr(self.vc, '_started') or not self.vc._started:
+        if not hasattr(self.vc, "_started") or not self.vc._started:
             try:
                 await self.vc.start()
             except PyTgCallsAlreadyRunning:
@@ -145,7 +128,9 @@ class Call(PyTgCalls):
         for user_id, user in current_users.items():
             if user_id not in self.vc_users:
                 first_name = user.user.first_name if user.user.first_name else "Unknown"
-                username = f"@{user.user.username}" if user.user.username else "No Username"
+                username = (
+                    f"@{user.user.username}" if user.user.username else "No Username"
+                )
                 message = f"🎙 **User Joined VC**\n👤 **Name:** {first_name}\n🔹 **Username:** {username}\n🆔 **ID:** `{user_id}`"
                 await app.send_message(chat_id, message)
 
@@ -153,13 +138,14 @@ class Call(PyTgCalls):
             if user_id not in current_users:
                 user = self.vc_users[user_id]
                 first_name = user.user.first_name if user.user.first_name else "Unknown"
-                username = f"@{user.user.username}" if user.user.username else "No Username"
+                username = (
+                    f"@{user.user.username}" if user.user.username else "No Username"
+                )
                 message = f"🚫 **User Left VC**\n👤 **Name:** {first_name}\n🔹 **Username:** {username}\n🆔 **ID:** `{user_id}`"
                 await app.send_message(chat_id, message)
 
         self.vc_users = current_users
-        
-        
+
     async def pause_stream(self, chat_id: int):
         assistant = await group_assistant(self, chat_id)
         await assistant.pause_stream(chat_id)
@@ -307,7 +293,7 @@ class Call(PyTgCalls):
             )
         else:
             stream = MediaStream(
-                link, 
+                link,
                 AudioQuality.STUDIO,
                 video_flags=MediaStream.Flags.IGNORE,
             )
@@ -370,7 +356,7 @@ class Call(PyTgCalls):
                 )
                 if video
                 else MediaStream(
-                    link, 
+                    link,
                     AudioQuality.STUDIO,
                     video_flags=MediaStream.Flags.IGNORE,
                 )
@@ -531,7 +517,7 @@ class Call(PyTgCalls):
                     )
                     if str(streamtype) == "video"
                     else MediaStream(
-                        videoid, 
+                        videoid,
                         AudioQuality.STUDIO,
                         video_flags=MediaStream.Flags.IGNORE,
                     )
@@ -576,9 +562,11 @@ class Call(PyTgCalls):
                     button = stream_markup(_, chat_id)
                     run = await app.send_photo(
                         chat_id=original_chat_id,
-                        photo=config.TELEGRAM_AUDIO_URL
-                        if str(streamtype) == "audio"
-                        else config.TELEGRAM_VIDEO_URL,
+                        photo=(
+                            config.TELEGRAM_AUDIO_URL
+                            if str(streamtype) == "audio"
+                            else config.TELEGRAM_VIDEO_URL
+                        ),
                         caption=_["stream_1"].format(
                             config.SUPPORT_GROUP, title[:23], check[0]["dur"], user
                         ),
@@ -628,8 +616,7 @@ class Call(PyTgCalls):
         if config.STRING5:
             pings.append(self.five.ping)
         return str(round(sum(pings) / len(pings), 3))
-    
-    
+
     async def start(self):
         LOGGER(__name__).info("Starting PyTgCalls Client...\n")
         if config.STRING1:
@@ -643,22 +630,17 @@ class Call(PyTgCalls):
         if config.STRING5:
             await self.five.start()
 
-    
     async def decorators(self):
         @self.one.on_update(filters.chat_update(ChatUpdate.Status.KICKED))
         @self.two.on_update(filters.chat_update(ChatUpdate.Status.KICKED))
         @self.three.on_update(filters.chat_update(ChatUpdate.Status.KICKED))
         @self.four.on_update(filters.chat_update(ChatUpdate.Status.KICKED))
         @self.five.on_update(filters.chat_update(ChatUpdate.Status.KICKED))
-        
-
         @self.one.on_update(filters.chat_update(ChatUpdate.Status.CLOSED_VOICE_CHAT))
         @self.two.on_update(filters.chat_update(ChatUpdate.Status.CLOSED_VOICE_CHAT))
         @self.three.on_update(filters.chat_update(ChatUpdate.Status.CLOSED_VOICE_CHAT))
         @self.four.on_update(filters.chat_update(ChatUpdate.Status.CLOSED_VOICE_CHAT))
         @self.five.on_update(filters.chat_update(ChatUpdate.Status.CLOSED_VOICE_CHAT))
-        
-            
         @self.one.on_update(filters.chat_update(ChatUpdate.Status.LEFT_GROUP))
         @self.two.on_update(filters.chat_update(ChatUpdate.Status.LEFT_GROUP))
         @self.three.on_update(filters.chat_update(ChatUpdate.Status.LEFT_GROUP))
@@ -675,7 +657,6 @@ class Call(PyTgCalls):
         async def handle_update(client: PyTgCalls, update: Update):
             await self.track_vc(client, update)
 
-        
         @self.one.on_update(filters.stream_end)
         @self.two.on_update(filters.stream_end)
         @self.three.on_update(filters.stream_end)
@@ -685,5 +666,6 @@ class Call(PyTgCalls):
             if not isinstance(update, StreamAudioEnded):
                 return
             await self.change_stream(client, update.chat_id)
+
 
 BAD = Call()
